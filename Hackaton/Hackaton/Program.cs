@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace SnakeGame
 {
-    // Struktura pro reprezentaci pozice
+    // Struktura pro reprezentaci pozice v 2D prostoru
     public struct Position
     {
         public int X { get; set; }
@@ -44,16 +44,16 @@ namespace SnakeGame
     // Hlavní třída pro Snake hru
     public class SnakeGame
     {
-        private const int BOARD_WIDTH = 160;
-        private const int BOARD_HEIGHT = 58;
+        private const byte BOARD_WIDTH = 75;
+        private const byte BOARD_HEIGHT = 32;
         private const char SNAKE_CHAR = '█';
-        private const char FOOD_CHAR = '@';
+        private const char FOOD_CHAR = 'O';
         private const char WALL_CHAR = '#';
 
         private List<Position> snake;
         private Position food;
         private Direction currentDirection;
-        private int score;
+        private byte score;
         private bool gameOver;
         private Random random;
 
@@ -82,11 +82,11 @@ namespace SnakeGame
 
             // Inicializace hada (začíná uprostřed)
             snake.Clear();
-            int startX = BOARD_WIDTH / 2;
-            int startY = BOARD_HEIGHT / 2;
+            byte startX = BOARD_WIDTH / 2;
+            byte startY = BOARD_HEIGHT / 2;
 
             // Vytvoření hada délky 5
-            for (int i = 0; i < 5; i++)
+            for (byte i = 0; i < 5; i++)
             {
                 snake.Add(new Position(startX - i, startY));
             }
@@ -114,7 +114,8 @@ namespace SnakeGame
                 DrawGame();
                 ProcessInput();
                 Update();
-                //Thread.Sleep(1); // Rychlost hry
+
+                Thread.Sleep(20); // Rychlost hry
             }
 
             ShowGameOver();
@@ -129,11 +130,11 @@ namespace SnakeGame
             Console.WriteLine();
 
             // Kreslení herního pole
-            for (int y = 0; y < BOARD_HEIGHT; y++)
+            for (byte y = 0; y < BOARD_HEIGHT; y++)
             {
                 Console.Write(WALL_CHAR);
 
-                for (int x = 0; x < BOARD_WIDTH; x++)
+                for (byte x = 0; x < BOARD_WIDTH; x++)
                 {
                     Position currentPos = new Position(x, y);
 
@@ -205,7 +206,7 @@ namespace SnakeGame
                         gameOver = true;
                         break;
                 }
-            }
+            } 
         }
 
         private void Update()
