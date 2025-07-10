@@ -1,0 +1,337 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+
+namespace SnakeGame
+{
+    // Struktura pro reprezentaci pozice
+    public struct Position
+    {
+        public int X { get; set; }
+        public int Y { get; set; }
+
+        public Position(int x, int y)
+        {
+            X = x;
+            Y = y;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is Position other)
+            {
+                return X == other.X && Y == other.Y;
+            }
+            return false;
+        }
+
+        public override int GetHashCode()
+        {
+            return X ^ Y;
+        }
+    }
+
+    // Enum pro směry pohybu
+    public enum Direction
+    {
+        Up,
+        Down,
+        Left,
+        Right
+    }
+
+    // Hlavní třída pro Snake hru
+    public class SnakeGame
+    {
+        private const int BOARD_WIDTH = 160;
+        private const int BOARD_HEIGHT = 58;
+        private const char SNAKE_CHAR = '█';
+        private const char FOOD_CHAR = '@';
+        private const char WALL_CHAR = '#';
+
+        private List<Position> snake;
+        private Position food;
+        private Direction currentDirection;
+        private int score;
+        private bool gameOver;
+        private Random random;
+
+        public SnakeGame()
+        {
+            snake = new List<Position>();
+            random = new Random();
+            InitializeGame();
+        }
+
+        private void InitializeGame()
+        {
+            // Inicializace konzole
+            Console.CursorVisible = false;
+            Console.Clear();
+
+            // Nastavení velikosti okna
+            try
+            {
+                Console.SetWindowSize(BOARD_WIDTH + 2, BOARD_HEIGHT + 5);
+            }
+            catch (Exception)
+            {
+                // Ignorujeme chybu pokud nelze nastavit velikost okna
+            }
+
+            // Inicializace hada (začíná uprostřed)
+            snake.Clear();
+            int startX = BOARD_WIDTH / 2;
+            int startY = BOARD_HEIGHT / 2;
+
+            // Vytvoření hada délky 5
+            for (int i = 0; i < 5; i++)
+            {
+                snake.Add(new Position(startX - i, startY));
+            }
+
+            currentDirection = Direction.Right;
+            score = 0;
+            gameOver = false;
+
+            GenerateFood();
+        }
+
+        private void GenerateFood()
+        {
+            do
+            {
+                food = new Position(random.Next(1, BOARD_WIDTH - 1),
+                                  random.Next(1, BOARD_HEIGHT - 1));
+            } while (snake.Contains(food));
+        }
+
+        public void Run()
+        {
+            while (!gameOver)
+            {
+                DrawGame();
+                ProcessInput();
+                Update();
+                //Thread.Sleep(1); // Rychlost hry
+            }
+
+            ShowGameOver();
+        }
+
+        private void DrawGame()
+        {
+            Console.SetCursorPosition(0, 0);
+
+            // Kreslení horní hranice
+            Console.Write(new string(WALL_CHAR, BOARD_WIDTH + 2));
+            Console.WriteLine();
+
+            // Kreslení herního pole
+            for (int y = 0; y < BOARD_HEIGHT; y++)
+            {
+                Console.Write(WALL_CHAR);
+
+                for (int x = 0; x < BOARD_WIDTH; x++)
+                {
+                    Position currentPos = new Position(x, y);
+
+                    if (snake.Contains(currentPos))
+                    {
+                        // Kreslení hlavy hada jiným symbolem
+                        if (snake[0].Equals(currentPos))
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.Write(SNAKE_CHAR);
+                        }
+                        else
+                        {
+                            Console.ForegroundColor = ConsoleColor.Green;
+                            Console.Write(SNAKE_CHAR);
+                        }
+                        Console.ResetColor();
+                    }
+                    else if (food.Equals(currentPos))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.Write(FOOD_CHAR);
+                        Console.ResetColor();
+                    }
+                    else
+                    {
+                        Console.Write(' ');
+                    }
+                }
+
+                Console.Write(WALL_CHAR);
+                Console.WriteLine();
+            }
+
+            // Kreslení dolní hranice
+            Console.Write(new string(WALL_CHAR, BOARD_WIDTH + 2));
+            Console.WriteLine();
+
+            // Zobrazení skóre
+            Console.WriteLine($"Skóre: {score}");
+            Console.WriteLine("Použijte šipky pro pohyb, ESC pro ukončení");
+        }
+
+        private void ProcessInput()
+        {
+            if (Console.KeyAvailable)
+            {
+                ConsoleKeyInfo keyInfo = Console.ReadKey(true);
+
+                switch (keyInfo.Key)
+                {
+                    case ConsoleKey.UpArrow:
+                        if (currentDirection != Direction.Down)
+                            currentDirection = Direction.Up;
+                        break;
+                    case ConsoleKey.DownArrow:
+                        if (currentDirection != Direction.Up)
+                            currentDirection = Direction.Down;
+                        break;
+                    case ConsoleKey.LeftArrow:
+                        if (currentDirection != Direction.Right)
+                            currentDirection = Direction.Left;
+                        break;
+                    case ConsoleKey.RightArrow:
+                        if (currentDirection != Direction.Left)
+                            currentDirection = Direction.Right;
+                        break;
+                    case ConsoleKey.Escape:
+                        gameOver = true;
+                        break;
+                }
+            }
+        }
+
+        private void Update()
+        {
+            if (gameOver) return;
+
+            // Získání pozice hlavy
+            Position head = snake[0];
+            Position newHead = GetNextPosition(head, currentDirection);
+
+            // Kontrola kolize se stěnami
+            if (newHead.X < 0 || newHead.X >= BOARD_WIDTH ||
+                newHead.Y < 0 || newHead.Y >= BOARD_HEIGHT)
+            {
+                gameOver = true;
+                return;
+            }
+
+            // Kontrola kolize se sebou
+            if (snake.Contains(newHead))
+            {
+                gameOver = true;
+                return;
+            }
+
+            // Přidání nové hlavy
+            snake.Insert(0, newHead);
+
+            // Kontrola, zda had snědl jídlo
+            if (newHead.Equals(food))
+            {
+                score++;
+                GenerateFood();
+            }
+            else
+            {
+                // Odstranění ocasu (had se neprodlouží)
+                snake.RemoveAt(snake.Count - 1);
+            }
+        }
+
+        private Position GetNextPosition(Position current, Direction direction)
+        {
+            switch (direction)
+            {
+                case Direction.Up:
+                    return new Position(current.X, current.Y - 1);
+                case Direction.Down:
+                    return new Position(current.X, current.Y + 1);
+                case Direction.Left:
+                    return new Position(current.X - 1, current.Y);
+                case Direction.Right:
+                    return new Position(current.X + 1, current.Y);
+                default:
+                    return current;
+            }
+        }
+
+        private void ShowGameOver()
+        {
+            Console.Clear();
+            Console.SetCursorPosition(BOARD_WIDTH / 2 - 5, BOARD_HEIGHT / 2);
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("GAME OVER!");
+            Console.ResetColor();
+
+            Console.SetCursorPosition(BOARD_WIDTH / 2 - 8, BOARD_HEIGHT / 2 + 2);
+            Console.WriteLine($"Konečné skóre: {score}");
+
+            Console.SetCursorPosition(BOARD_WIDTH / 2 - 15, BOARD_HEIGHT / 2 + 4);
+            Console.WriteLine("Stiskněte R pro restart nebo ESC pro ukončení");
+
+            while (true)
+            {
+                ConsoleKeyInfo key = Console.ReadKey(true);
+                if (key.Key == ConsoleKey.R)
+                {
+                    InitializeGame();
+                    Run();
+                    break;
+                }
+                else if (key.Key == ConsoleKey.Escape)
+                {
+                    break;
+                }
+            }
+        }
+    }
+
+    // Hlavní program
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            Console.Title = "Snake Game";
+
+            // Zobrazení úvodní obrazovky
+            ShowWelcomeScreen();
+
+            // Spuštění hry
+            SnakeGame game = new SnakeGame();
+            game.Run();
+
+            Console.WriteLine("Děkujeme za hru!");
+            Console.ReadKey();
+        }
+
+        static void ShowWelcomeScreen()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Green;
+            Console.WriteLine("═══════════════════════════════════════");
+            Console.WriteLine("           SNAKE GAME v1.0");
+            Console.WriteLine("═══════════════════════════════════════");
+            Console.ResetColor();
+
+            Console.WriteLine();
+            Console.WriteLine("Jak hrát:");
+            Console.WriteLine("• Použijte šipky pro pohyb hada");
+            Console.WriteLine("• Sbírejte červené jídlo pro získání bodů");
+            Console.WriteLine("• Vyvarujte se kolize se stěnami a sebou");
+            Console.WriteLine("• Stiskněte ESC pro ukončení hry");
+            Console.WriteLine();
+
+            Console.WriteLine("Stiskněte libovolnou klávesu pro start...");
+            Console.ReadKey();
+        }
+    }
+}

@@ -1,0 +1,15 @@
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\bin\Debug\net7.0\Hackaton.exe
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\bin\Debug\net7.0\Hackaton.deps.json
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\bin\Debug\net7.0\Hackaton.runtimeconfig.json
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\bin\Debug\net7.0\Hackaton.dll
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\bin\Debug\net7.0\Hackaton.pdb
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.csproj.AssemblyReference.cache
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.AssemblyInfoInputs.cache
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.AssemblyInfo.cs
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.csproj.CoreCompileInputs.cache
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.dll
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\refint\Hackaton.dll
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.pdb
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\Hackaton.genruntimeconfig.cache
+C:\Users\navsteva\Desktop\hackaton_project\Hackaton\Hackaton\obj\Debug\net7.0\ref\Hackaton.dll
