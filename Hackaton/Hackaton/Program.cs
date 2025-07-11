@@ -1,338 +1,641 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace SnakeGame
+namespace HerniProjekt
 {
-    // Struktura pro reprezentaci pozice v 2D prostoru
-    public struct Position
+    class HerniMenu
     {
-        public int X { get; set; }
-        public int Y { get; set; }
-
-        public Position(int x, int y)
+        static void Main(string[] args)
         {
-            X = x;
-            Y = y;
+            bool running = true;
+            while (running)
+            {
+                Console.Clear();
+                Console.WriteLine("=== HERNÍ MENU ===");
+                Console.WriteLine("1. Policajti a cíl");
+                Console.WriteLine("2. Skákací plošinovka");
+                Console.WriteLine("3. Snake");
+                Console.WriteLine("0. Konec");
+                Console.Write("Zadej volbu: ");
+                string input = Console.ReadLine();
+
+                switch (input)
+                {
+                    case "1":
+                        HraPolicajti.Start();
+                        break;
+                    case "2":
+                        SkakaciHra.Start();
+                        break;
+                    case "3":
+                        SnakeGame.Start();
+                        break;
+                    case "0":
+                        running = false;
+                        break;
+                    default:
+                        Console.WriteLine("Neplatná volba. Stiskni libovolnou klávesu...");
+                        Console.ReadKey();
+                        break;
+                }
+            }
+        }
+    }
+
+    class HraPolicajti
+    {
+        public static void Start()
+        {
+            Console.CursorVisible = false;
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+            Thread vstupThread = new Thread(SledujKlavesy);
+            vstupThread.IsBackground = true;
+            vstupThread.Start();
+
+            NactiLevel(aktualniLevel);
+
+            int interval = 120;
+            int tick = 0;
+
+            konec = false;
+            while (!konec)
+            {
+                var start = DateTime.Now;
+                VykresliMapu();
+                if (tick % 2 == 0)
+                {
+                    PohniHrace();
+                }
+                PohniPolicisty();
+                if (ZkontrolujKolize()) break;
+                tick++;
+                int cekani = interval - (int)(DateTime.Now - start).TotalMilliseconds;
+                if (cekani > 0) Thread.Sleep(cekani);
+            }
+
+            Console.SetCursorPosition(0, vyska + 3);
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("Konec hry. Stiskni libovolnou klávesu...");
+            Console.ReadKey();
         }
 
-        public override bool Equals(object obj)
+        static string[][] levely = new string[][]
         {
-            if (obj is Position other)
+            new string[]
             {
-                return X == other.X && Y == other.Y;
+                "##############################",
+                "#Z   #     #####      #     X#",
+                "### ### ###   ### ##  ### ####",
+                "#         #   #   #       #  #",
+                "# ### ### ##### ### ##### #  #",
+                "#   #     #         #     ####",
+                "##### ### # # ##### # ####### ",
+                "#       #                    #",
+                "##############################"
+            },
+            new string[]
+            {
+                "##############################",
+                "#Z    #     ###     ###     X#",
+                "# ### # ### ### ### ### #####",
+                "# #     #   #   #   #       #",
+                "# # ### # ##### ##### ##### #",
+                "#     #       ##     #   #",
+                "### ####### # #####   # # ###",
+                "#         # #         #     #",
+                "##############################"
+            }
+        };
+
+        static int aktualniLevel = 0;
+        static char[,] mapa;
+        static int sirka, vyska;
+        static int hracX, hracY;
+        static int cilX, cilY;
+        static List<(int x, int y, int smer)> policajti = new List<(int x, int y, int smer)>();
+        static Random rnd = new Random();
+
+        static bool drzimW = false, drzimS = false, drzimA = false, drzimD = false;
+        static bool konec = false;
+
+        static void NactiLevel(int index)
+        {
+            var radky = levely[index];
+            vyska = radky.Length;
+            sirka = radky[0].Length;
+            mapa = new char[vyska, sirka];
+            policajti.Clear();
+
+            for (int y = 0; y < vyska; y++)
+            {
+                for (int x = 0; x < sirka; x++)
+                {
+                    char znak = radky[y][x];
+                    mapa[y, x] = znak;
+                    if (znak == 'Z') { hracX = x; hracY = y; mapa[y, x] = ' '; }
+                    if (znak == 'X') { cilX = x; cilY = y; }
+                }
+            }
+
+            policajti.Add((5, 2, 1));
+            policajti.Add((10, 5, -1));
+            policajti.Add((20, 3, 1));
+        }
+
+        static void VykresliMapu()
+        {
+            Console.SetCursorPosition(0, 0);
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine($"Level {aktualniLevel + 1}");
+
+            for (int y = 0; y < vyska; y++)
+            {
+                for (int x = 0; x < sirka; x++)
+                {
+                    if (x == hracX && y == hracY)
+                        Console.ForegroundColor = ConsoleColor.Red;
+                    else if (x == cilX && y == cilY)
+                        Console.ForegroundColor = ConsoleColor.Green;
+                    else if (policajti.Exists(p => p.x == x && p.y == y))
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                    else
+                        Console.ForegroundColor = ConsoleColor.White;
+
+                    if (x == hracX && y == hracY) Console.Write("Z");
+                    else if (x == cilX && y == cilY) Console.Write("X");
+                    else if (policajti.Exists(p => p.x == x && p.y == y)) Console.Write("P");
+                    else Console.Write(mapa[y, x]);
+                }
+                Console.WriteLine();
+            }
+        }
+
+        static void SledujKlavesy()
+        {
+            while (true)
+            {
+                var key = Console.ReadKey(true).Key;
+                if (key == ConsoleKey.W) drzimW = true;
+                if (key == ConsoleKey.S) drzimS = true;
+                if (key == ConsoleKey.A) drzimA = true;
+                if (key == ConsoleKey.D) drzimD = true;
+                if (key == ConsoleKey.Escape) konec = true;
+            }
+        }
+
+        static void PohniHrace()
+        {
+            int novaX = hracX, novaY = hracY;
+            if (drzimW) novaY--;
+            else if (drzimS) novaY++;
+            else if (drzimA) novaX--;
+            else if (drzimD) novaX++;
+
+            if (JeVolne(novaX, novaY))
+            {
+                hracX = novaX;
+                hracY = novaY;
+            }
+
+            drzimW = drzimS = drzimA = drzimD = false;
+        }
+
+        static void PohniPolicisty()
+        {
+            for (int i = 0; i < policajti.Count; i++)
+            {
+                int x = policajti[i].x;
+                int y = policajti[i].y;
+                int smer = policajti[i].smer;
+                int novaX = x + smer;
+
+                if (JeVolne(novaX, y))
+                {
+                    policajti[i] = (novaX, y, smer);
+                }
+                else
+                {
+                    smer *= -1;
+                    novaX = x + smer;
+                    if (JeVolne(novaX, y)) policajti[i] = (novaX, y, smer);
+                    else policajti[i] = (x, y, smer);
+                }
+            }
+        }
+
+        static bool JeVolne(int x, int y)
+        {
+            return x >= 0 && x < sirka && y >= 0 && y < vyska && mapa[y, x] != '#';
+        }
+
+        static bool ZkontrolujKolize()
+        {
+            foreach (var p in policajti)
+                if (p.x == hracX && p.y == hracY)
+                {
+                    Console.Clear();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("\u274C Policie tě chytila!");
+                    return true;
+                }
+
+            if (hracX == cilX && hracY == cilY)
+            {
+                aktualniLevel++;
+                if (aktualniLevel < levely.Length)
+                {
+                    NactiLevel(aktualniLevel);
+                    return false;
+                }
+                else
+                {
+                    Console.Clear();
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("\ud83c\udfc6 Vyhrál jsi všechny levely!");
+                    return true;
+                }
             }
             return false;
         }
+    }
 
-        public override int GetHashCode()
+    static class SkakaciHra
+    {
+        static int targetFps = 50;
+        static int frameTime = 1000 / targetFps;
+        static int width, height;
+        static double gravity = 0.2;
+        static double jumpVelocity = -6;
+        static double horizontalSpeed = 2;
+        static int platformWidth = 7;
+        static int platformCount = 10;
+        static List<Platform> platforms;
+        static Ball ball;
+        static double scoreDistance;
+        static Random rand = new Random();
+        static char[,] screenBuffer;
+
+        const int VK_LEFT = 0x25;
+        const int VK_RIGHT = 0x27;
+        [DllImport("user32.dll")]
+        static extern short GetAsyncKeyState(int vKey);
+
+        public static void Start()
         {
-            return X ^ Y;
+            Console.CursorVisible = false;
+            Console.Clear();
+            width = Console.WindowWidth;
+            height = Console.WindowHeight;
+            screenBuffer = new char[height, width];
+            scoreDistance = 0;
+            Initialize();
+
+            var sw = new Stopwatch();
+            while (true)
+            {
+                sw.Restart();
+                Update();
+                Render();
+                int elapsed = (int)sw.ElapsedMilliseconds;
+                if (elapsed < frameTime)
+                    Thread.Sleep(frameTime - elapsed);
+            }
+        }
+
+        static void Initialize()
+        {
+            platforms = new List<Platform>();
+            for (int i = 0; i < platformCount; i++)
+            {
+                int y = height - 1 - i * (height / platformCount);
+                int x = rand.Next(0, Math.Max(1, width - platformWidth));
+                platforms.Add(new Platform(x, y));
+            }
+            var p0 = platforms[0];
+            ball = new Ball(p0.X + platformWidth / 2, p0.Y - 1);
+        }
+
+        static void Update()
+        {
+            ball.PreviousY = ball.Y;
+            if (GetAsyncKeyState(VK_LEFT) < 0) ball.X -= horizontalSpeed;
+            if (GetAsyncKeyState(VK_RIGHT) < 0) ball.X += horizontalSpeed;
+            ball.VY += gravity;
+            ball.Y += ball.VY;
+
+            if (ball.VY > 0)
+            {
+                foreach (var p in platforms)
+                {
+                    if (ball.PreviousY < p.Y && ball.Y >= p.Y && ball.X >= p.X && ball.X <= p.X + platformWidth)
+                    {
+                        ball.VY = jumpVelocity;
+                        ball.Y = p.Y - 1;
+                        break;
+                    }
+                }
+            }
+
+            if (ball.Y < height / 3.0)
+            {
+                double shift = height / 3.0 - ball.Y;
+                ball.Y = height / 3.0;
+                scoreDistance += shift;
+                for (int i = 0; i < platforms.Count; i++)
+                {
+                    platforms[i].Y += shift;
+                    if (platforms[i].Y > height - 1)
+                    {
+                        platforms[i].Y = 0;
+                        platforms[i].X = rand.Next(0, Math.Max(1, width - platformWidth));
+                    }
+                }
+            }
+
+            if (ball.Y > height - 1)
+            {
+                Console.Clear();
+                Console.SetCursorPosition(Math.Max(0, width / 2 - 5), Math.Max(0, height / 2));
+                Console.Write("Game Over!");
+                Thread.Sleep(2000);
+                return;
+            }
+
+            ball.X = Math.Max(0, Math.Min(ball.X, width - 1));
+        }
+
+        static void Render()
+        {
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    screenBuffer[y, x] = ' ';
+
+            foreach (var p in platforms)
+            {
+                int px = (int)Math.Round(p.X);
+                int py = (int)Math.Round(p.Y);
+                if (py >= 0 && py < height)
+                    for (int i = 0; i < platformWidth && px + i < width; i++)
+                        screenBuffer[py, px + i] = '=';
+            }
+
+            int bx = (int)Math.Round(ball.X);
+            int by = (int)Math.Round(ball.Y);
+            if (bx >= 0 && bx < width && by >= 0 && by < height)
+                screenBuffer[by, bx] = 'O';
+
+            var scoreText = $"Score: {(int)scoreDistance}";
+            for (int i = 0; i < scoreText.Length && i < width; i++)
+                screenBuffer[0, i] = scoreText[i];
+
+            for (int y = 0; y < height; y++)
+            {
+                Console.SetCursorPosition(0, y);
+                for (int x = 0; x < width; x++)
+                    Console.Write(screenBuffer[y, x]);
+            }
         }
     }
 
-    // Enum pro směry pohybu
-    public enum Direction
+    // ===== NOVÁ TŘÍDA - SNAKE HRA =====
+    static class SnakeGame
     {
-        Up,
-        Down,
-        Left,
-        Right
-    }
+        static int sirka = 40;
+        static int vyska = 20;
+        static int hadX, hadY;
+        static int jidloX, jidloY;
+        static int smerX = 1, smerY = 0;
+        static List<(int x, int y)> hadTelo = new List<(int x, int y)>();
+        static int skore = 0;
+        static bool konec = false;
+        static Random rnd = new Random();
 
-    // Hlavní třída pro Snake hru
-    public class SnakeGame
-    {
-        private const byte BOARD_WIDTH = 75;
-        private const byte BOARD_HEIGHT = 32;
-        private const char SNAKE_CHAR = '█';
-        private const char FOOD_CHAR = 'O';
-        private const char WALL_CHAR = '#';
+        // Rychlosti pro různé směry
+        static int horizontalniRychlost = 100;  // Rychlejší pro vlevo/vpravo
+        static int vertikalniRychlost = 200;    // Pomalejší pro nahoru/dolů
+        static int aktualniRychlost = 100;
 
-        private List<Position> snake;
-        private Position food;
-        private Direction currentDirection;
-        private byte score;
-        private bool gameOver;
-        private Random random;
-
-        public SnakeGame()
+        public static void Start()
         {
-            snake = new List<Position>();
-            random = new Random();
-            InitializeGame();
-        }
-
-        private void InitializeGame()
-        {
-            // Inicializace konzole
             Console.CursorVisible = false;
             Console.Clear();
 
-            // Nastavení velikosti okna
-            try
+            // Inicializace hada
+            hadX = sirka / 2;
+            hadY = vyska / 2;
+            hadTelo.Clear();
+            hadTelo.Add((hadX, hadY));
+
+            // Vytvoření prvního jídla
+            VytvorJidlo();
+
+            // Hlavní herní smyčka
+            Thread vstupThread = new Thread(SledujKlavesy);
+            vstupThread.IsBackground = true;
+            vstupThread.Start();
+
+            konec = false;
+            while (!konec)
             {
-                Console.SetWindowSize(BOARD_WIDTH + 2, BOARD_HEIGHT + 5);
-            }
-            catch (Exception)
-            {
-                // Ignorujeme chybu pokud nelze nastavit velikost okna
-            }
+                var start = DateTime.Now;
+                VykresliHru();
+                PohniHada();
+                ZkontrolujKolize();
 
-            // Inicializace hada (začíná uprostřed)
-            snake.Clear();
-            byte startX = BOARD_WIDTH / 2;
-            byte startY = BOARD_HEIGHT / 2;
-
-            // Vytvoření hada délky 5
-            for (byte i = 0; i < 5; i++)
-            {
-                snake.Add(new Position(startX - i, startY));
+                // Čekání podle aktuální rychlosti
+                int cekani = aktualniRychlost - (int)(DateTime.Now - start).TotalMilliseconds;
+                if (cekani > 0) Thread.Sleep(cekani);
             }
 
-            currentDirection = Direction.Right;
-            score = 0;
-            gameOver = false;
+            Console.SetCursorPosition(0, vyska + 3);
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("Konec hry. Stiskni libovolnou klávesu...");
+            Console.ReadKey();
 
-            GenerateFood();
+            // Reset pro další hru
+            skore = 0;
+            smerX = 1;
+            smerY = 0;
+            aktualniRychlost = horizontalniRychlost;
         }
 
-        private void GenerateFood()
+        static void VytvorJidlo()
         {
             do
             {
-                food = new Position(random.Next(1, BOARD_WIDTH - 1),
-                                  random.Next(1, BOARD_HEIGHT - 1));
-            } while (snake.Contains(food));
+                jidloX = rnd.Next(1, sirka - 1);
+                jidloY = rnd.Next(1, vyska - 1);
+            } while (hadTelo.Exists(segment => segment.x == jidloX && segment.y == jidloY));
         }
 
-        public void Run()
-        {
-            while (!gameOver)
-            {
-                DrawGame();
-                ProcessInput();
-                Update();
-
-                Thread.Sleep(20); // Rychlost hry
-            }
-
-            ShowGameOver();
-        }
-
-        private void DrawGame()
+        static void VykresliHru()
         {
             Console.SetCursorPosition(0, 0);
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine($"Snake - Skóre: {skore} | Rychlost: {(aktualniRychlost == horizontalniRychlost ? "Rychlá" : "Pomalá")}");
 
-            // Kreslení horní hranice
-            Console.Write(new string(WALL_CHAR, BOARD_WIDTH + 2));
-            Console.WriteLine();
+            // Horní ohraničení
+            Console.Write("╔");
+            for (int x = 0; x < sirka; x++) Console.Write("═");
+            Console.WriteLine("╗");
 
-            // Kreslení herního pole
-            for (byte y = 0; y < BOARD_HEIGHT; y++)
+            // Herní pole
+            for (int y = 0; y < vyska; y++)
             {
-                Console.Write(WALL_CHAR);
-
-                for (byte x = 0; x < BOARD_WIDTH; x++)
+                Console.Write("║");
+                for (int x = 0; x < sirka; x++)
                 {
-                    Position currentPos = new Position(x, y);
-
-                    if (snake.Contains(currentPos))
+                    if (hadTelo.Exists(segment => segment.x == x && segment.y == y))
                     {
-                        // Kreslení hlavy hada jiným symbolem
-                        if (snake[0].Equals(currentPos))
+                        // Hlava hada je žlutá, tělo zelené
+                        if (hadTelo[0].x == x && hadTelo[0].y == y)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
-                            Console.Write(SNAKE_CHAR);
+                            Console.Write("█");
                         }
                         else
                         {
                             Console.ForegroundColor = ConsoleColor.Green;
-                            Console.Write(SNAKE_CHAR);
+                            Console.Write("█");
                         }
-                        Console.ResetColor();
+                        Console.ForegroundColor = ConsoleColor.White;
                     }
-                    else if (food.Equals(currentPos))
+                    else if (x == jidloX && y == jidloY)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
-                        Console.Write(FOOD_CHAR);
-                        Console.ResetColor();
+                        Console.Write("●");
+                        Console.ForegroundColor = ConsoleColor.White;
                     }
                     else
                     {
-                        Console.Write(' ');
+                        Console.Write(" ");
                     }
                 }
-
-                Console.Write(WALL_CHAR);
-                Console.WriteLine();
+                Console.WriteLine("║");
             }
 
-            // Kreslení dolní hranice
-            Console.Write(new string(WALL_CHAR, BOARD_WIDTH + 2));
-            Console.WriteLine();
+            // Dolní ohraničení
+            Console.Write("╚");
+            for (int x = 0; x < sirka; x++) Console.Write("═");
+            Console.WriteLine("╝");
 
-            // Zobrazení skóre
-            Console.WriteLine($"Skóre: {score}");
-            Console.WriteLine("Použijte šipky pro pohyb, ESC pro ukončení");
+            Console.WriteLine("Ovládání: šipky nebo WASD, ESC = konec");
+            Console.WriteLine("Horizontální pohyb je rychlejší než vertikální");
         }
 
-        private void ProcessInput()
+        static void SledujKlavesy()
         {
-            if (Console.KeyAvailable)
+            while (true)
             {
-                ConsoleKeyInfo keyInfo = Console.ReadKey(true);
+                var key = Console.ReadKey(true).Key;
 
-                switch (keyInfo.Key)
+                switch (key)
                 {
                     case ConsoleKey.UpArrow:
-                        if (currentDirection != Direction.Down)
-                            currentDirection = Direction.Up;
+                    case ConsoleKey.W:
+                        if (smerY != 1) // Nemůže jít opačným směrem
+                        {
+                            smerX = 0; smerY = -1;
+                            aktualniRychlost = vertikalniRychlost;
+                        }
                         break;
                     case ConsoleKey.DownArrow:
-                        if (currentDirection != Direction.Up)
-                            currentDirection = Direction.Down;
+                    case ConsoleKey.S:
+                        if (smerY != -1)
+                        {
+                            smerX = 0; smerY = 1;
+                            aktualniRychlost = vertikalniRychlost;
+                        }
                         break;
                     case ConsoleKey.LeftArrow:
-                        if (currentDirection != Direction.Right)
-                            currentDirection = Direction.Left;
+                    case ConsoleKey.A:
+                        if (smerX != 1)
+                        {
+                            smerX = -1; smerY = 0;
+                            aktualniRychlost = horizontalniRychlost;
+                        }
                         break;
                     case ConsoleKey.RightArrow:
-                        if (currentDirection != Direction.Left)
-                            currentDirection = Direction.Right;
+                    case ConsoleKey.D:
+                        if (smerX != -1)
+                        {
+                            smerX = 1; smerY = 0;
+                            aktualniRychlost = horizontalniRychlost;
+                        }
                         break;
                     case ConsoleKey.Escape:
-                        gameOver = true;
+                        konec = true;
                         break;
                 }
-            } 
+            }
         }
 
-        private void Update()
+        static void PohniHada()
         {
-            if (gameOver) return;
-
-            // Získání pozice hlavy
-            Position head = snake[0];
-            Position newHead = GetNextPosition(head, currentDirection);
-
-            // Kontrola kolize se stěnami
-            if (newHead.X < 0 || newHead.X >= BOARD_WIDTH ||
-                newHead.Y < 0 || newHead.Y >= BOARD_HEIGHT)
-            {
-                gameOver = true;
-                return;
-            }
-
-            // Kontrola kolize se sebou
-            if (snake.Contains(newHead))
-            {
-                gameOver = true;
-                return;
-            }
+            // Nová pozice hlavy
+            int novaX = hadTelo[0].x + smerX;
+            int novaY = hadTelo[0].y + smerY;
 
             // Přidání nové hlavy
-            snake.Insert(0, newHead);
+            hadTelo.Insert(0, (novaX, novaY));
 
-            // Kontrola, zda had snědl jídlo
-            if (newHead.Equals(food))
+            // Kontrola jídla
+            if (novaX == jidloX && novaY == jidloY)
             {
-                score++;
-                GenerateFood();
+                skore++;
+                VytvorJidlo();
             }
             else
             {
                 // Odstranění ocasu (had se neprodlouží)
-                snake.RemoveAt(snake.Count - 1);
+                hadTelo.RemoveAt(hadTelo.Count - 1);
             }
         }
 
-        private Position GetNextPosition(Position current, Direction direction)
+        static void ZkontrolujKolize()
         {
-            switch (direction)
+            var hlava = hadTelo[0];
+
+            // Kolize se stěnami
+            if (hlava.x < 0 || hlava.x >= sirka || hlava.y < 0 || hlava.y >= vyska)
             {
-                case Direction.Up:
-                    return new Position(current.X, current.Y - 1);
-                case Direction.Down:
-                    return new Position(current.X, current.Y + 1);
-                case Direction.Left:
-                    return new Position(current.X - 1, current.Y);
-                case Direction.Right:
-                    return new Position(current.X + 1, current.Y);
-                default:
-                    return current;
+                Console.Clear();
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine("💥 Narazil jsi do stěny!");
+                Console.WriteLine($"Tvé skóre: {skore}");
+                konec = true;
+                return;
             }
-        }
 
-        private void ShowGameOver()
-        {
-            Console.Clear();
-            Console.SetCursorPosition(BOARD_WIDTH / 2 - 5, BOARD_HEIGHT / 2);
-            Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("GAME OVER!");
-            Console.ResetColor();
-
-            Console.SetCursorPosition(BOARD_WIDTH / 2 - 8, BOARD_HEIGHT / 2 + 2);
-            Console.WriteLine($"Konečné skóre: {score}");
-
-            Console.SetCursorPosition(BOARD_WIDTH / 2 - 15, BOARD_HEIGHT / 2 + 4);
-            Console.WriteLine("Stiskněte R pro restart nebo ESC pro ukončení");
-
-            while (true)
+            // Kolize se sebou samým
+            for (int i = 1; i < hadTelo.Count; i++)
             {
-                ConsoleKeyInfo key = Console.ReadKey(true);
-                if (key.Key == ConsoleKey.R)
+                if (hadTelo[i].x == hlava.x && hadTelo[i].y == hlava.y)
                 {
-                    InitializeGame();
-                    Run();
-                    break;
-                }
-                else if (key.Key == ConsoleKey.Escape)
-                {
-                    break;
+                    Console.Clear();
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine("💥 Had se kousl do ocasu!");
+                    Console.WriteLine($"Tvé skóre: {skore}");
+                    konec = true;
+                    return;
                 }
             }
         }
     }
 
-    // Hlavní program
-    class Program
+    class Platform
     {
-        static void Main(string[] args)
-        {
-            Console.Title = "Snake Game";
+        public double X, Y;
+        public Platform(double x, double y) { X = x; Y = y; }
+    }
 
-            // Zobrazení úvodní obrazovky
-            ShowWelcomeScreen();
-
-            // Spuštění hry
-            SnakeGame game = new SnakeGame();
-            game.Run();
-
-            Console.WriteLine("Děkujeme za hru!");
-            Console.ReadKey();
-        }
-
-        static void ShowWelcomeScreen()
-        {
-            Console.Clear();
-            Console.ForegroundColor = ConsoleColor.Green;
-            Console.WriteLine("═══════════════════════════════════════");
-            Console.WriteLine("           SNAKE GAME v1.0");
-            Console.WriteLine("═══════════════════════════════════════");
-            Console.ResetColor();
-
-            Console.WriteLine();
-            Console.WriteLine("Jak hrát:");
-            Console.WriteLine("• Použijte šipky pro pohyb hada");
-            Console.WriteLine("• Sbírejte červené jídlo pro získání bodů");
-            Console.WriteLine("• Vyvarujte se kolize se stěnami a sebou");
-            Console.WriteLine("• Stiskněte ESC pro ukončení hry");
-            Console.WriteLine();
-
-            Console.WriteLine("Stiskněte libovolnou klávesu pro start...");
-            Console.ReadKey();
-        }
+    class Ball
+    {
+        public double X, Y, VY;
+        public double PreviousY;
+        public Ball(double x, double y) { X = x; Y = y; VY = 0; }
     }
 }

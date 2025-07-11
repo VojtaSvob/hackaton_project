@@ -1,0 +1,231 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+
+class Program
+{
+    const int Width = 40;
+    const int Height = 20;
+    const char BorderChar = '#';
+    const char PlayerChar = '@';
+    const char BombChar = 'B';
+    const char RockChar = 'K';
+    const char ExplosionChar = '*';
+
+    static int playerX = Width / 2;
+    static int playerY = Height - 2;
+
+    static List<Entity> bombs = new();
+    static List<Entity> rocks = new();
+    static List<Explosion> explosions = new();
+
+    static Random rnd = new();
+
+    static void Main()
+    {
+        Console.CursorVisible = false;
+        Console.Clear();
+
+        while (true)
+        {
+            if (Console.KeyAvailable)
+            {
+                var key = Console.ReadKey(true).Key;
+                MovePlayer(key);
+            }
+
+            SpawnEntities();
+            UpdateEntities();
+            UpdateExplosions();
+
+            if (CheckCollision())
+            {
+                GameOver();
+                return;
+            }
+
+            Draw();
+            Thread.Sleep(100);
+        }
+    }
+
+    static void MovePlayer(ConsoleKey key)
+    {
+        switch (key)
+        {
+            case ConsoleKey.LeftArrow:
+                if (playerX > 1) playerX--;
+                break;
+            case ConsoleKey.RightArrow:
+                if (playerX < Width - 2) playerX++;
+                break;
+            case ConsoleKey.UpArrow:
+                if (playerY > 1) playerY--;
+                break;
+            case ConsoleKey.DownArrow:
+                if (playerY < Height - 2) playerY++;
+                break;
+        }
+    }
+
+    static void SpawnEntities()
+    {
+        if (rnd.NextDouble() < 0.2)
+        {
+            int x = rnd.Next(1, Width - 1);
+            int dx = rnd.Next(-1, 2); // -1, 0, 1
+            bombs.Add(new Entity(x, 1, dx, 1, BombChar));
+        }
+
+        if (rnd.NextDouble() < 0.1)
+        {
+            int x = rnd.Next(1, Width - 1);
+            int dx = rnd.Next(-1, 2); // -1, 0, 1
+            rocks.Add(new Entity(x, 1, dx, 1, RockChar));
+        }
+    }
+
+    static void UpdateEntities()
+    {
+        List<Entity> toExplode = new();
+
+        foreach (var b in bombs.ToList())
+        {
+            b.Move();
+            if (b.Y >= Height - 1)
+            {
+                toExplode.Add(b);
+                bombs.Remove(b);
+            }
+        }
+
+        foreach (var r in rocks.ToList())
+        {
+            r.Move();
+            if (r.Y >= Height - 1 || r.X <= 0 || r.X >= Width - 1)
+                rocks.Remove(r);
+        }
+
+        foreach (var b in toExplode)
+        {
+            explosions.Add(new Explosion(b.X, b.Y));
+        }
+    }
+
+    static void UpdateExplosions()
+    {
+        explosions.RemoveAll(e => (DateTime.Now - e.StartTime).TotalMilliseconds > 500);
+    }
+
+    static bool CheckCollision()
+    {
+        foreach (var b in bombs)
+            if (b.X == playerX && b.Y == playerY)
+                return true;
+
+        foreach (var r in rocks)
+            if (r.X == playerX && r.Y == playerY)
+                return true;
+
+        foreach (var e in explosions)
+            if (e.X == playerX && e.Y == playerY)
+                return true;
+
+        return false;
+    }
+
+    static void Draw()
+    {
+        Console.SetCursorPosition(0, 0);
+
+        for (int y = 0; y < Height; y++)
+        {
+            for (int x = 0; x < Width; x++)
+            {
+                if (y == 0 || y == Height - 1 || x == 0 || x == Width - 1)
+                {
+                    Console.Write(BorderChar);
+                    continue;
+                }
+
+                if (x == playerX && y == playerY)
+                {
+                    Console.Write(PlayerChar);
+                    continue;
+                }
+
+                var bomb = bombs.FirstOrDefault(b => b.X == x && b.Y == y);
+                if (bomb != null)
+                {
+                    Console.Write(BombChar);
+                    continue;
+                }
+
+                var rock = rocks.FirstOrDefault(r => r.X == x && r.Y == y);
+                if (rock != null)
+                {
+                    Console.Write(RockChar);
+                    continue;
+                }
+
+                var explosion = explosions.FirstOrDefault(e => e.X == x && e.Y == y);
+                if (explosion != null)
+                {
+                    Console.Write(ExplosionChar);
+                    continue;
+                }
+
+                Console.Write(' ');
+            }
+            Console.WriteLine();
+        }
+    }
+
+    static void GameOver()
+    {
+        Console.Clear();
+        Console.SetCursorPosition(Width / 2 - 5, Height / 2);
+        Console.WriteLine("KONEC HRY");
+        Console.SetCursorPosition(Width / 2 - 9, Height / 2 + 1);
+        Console.WriteLine("Zmáèkni libovolnou klávesu...");
+        Console.ReadKey();
+    }
+
+    class Entity
+    {
+        public int X, Y;
+        int dx, dy;
+        char symbol;
+
+        public Entity(int x, int y, int dx, int dy, char symbol)
+        {
+            X = x;
+            Y = y;
+            this.dx = dx;
+            this.dy = dy;
+            this.symbol = symbol;
+        }
+
+        public void Move()
+        {
+            X += dx;
+            Y += dy;
+        }
+
+        public char Symbol => symbol;
+    }
+
+    class Explosion
+    {
+        public int X, Y;
+        public DateTime StartTime;
+
+        public Explosion(int x, int y)
+        {
+            X = x;
+            Y = y;
+            StartTime = DateTime.Now;
+        }
+    }
+}
