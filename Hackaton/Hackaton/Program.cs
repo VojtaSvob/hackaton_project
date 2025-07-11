@@ -1,12 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading;
 
-namespace HerniProjekt
+namespace GameProject
 {
-    class HerniMenu
+    class GameMenu
     {
         static void Main(string[] args)
         {
@@ -14,30 +15,34 @@ namespace HerniProjekt
             while (running)
             {
                 Console.Clear();
-                Console.WriteLine("=== HERNÍ MENU ===");
-                Console.WriteLine("1. Policajti a cíl");
-                Console.WriteLine("2. Skákací plošinovka");
+                Console.WriteLine("=== GAME MENU ===");
+                Console.WriteLine("1. Police Chase");
+                Console.WriteLine("2. Jumping Platformer");
                 Console.WriteLine("3. Snake");
-                Console.WriteLine("0. Konec");
-                Console.Write("Zadej volbu: ");
+                Console.WriteLine("4. Bomb Dodger");
+                Console.WriteLine("0. Exit");
+                Console.Write("Choose option: ");
                 string input = Console.ReadLine();
 
                 switch (input)
                 {
                     case "1":
-                        HraPolicajti.Start();
+                        PoliceGame.Start();
                         break;
                     case "2":
-                        SkakaciHra.Start();
+                        JumpingGame.Start();
                         break;
                     case "3":
                         SnakeGame.Start();
+                        break;
+                    case "4":
+                        BombDodger.Start();
                         break;
                     case "0":
                         running = false;
                         break;
                     default:
-                        Console.WriteLine("Neplatná volba. Stiskni libovolnou klávesu...");
+                        Console.WriteLine("Invalid choice. Press any key...");
                         Console.ReadKey();
                         break;
                 }
@@ -45,49 +50,49 @@ namespace HerniProjekt
         }
     }
 
-    class HraPolicajti
+    class PoliceGame
     {
         public static void Start()
         {
             Console.CursorVisible = false;
             Console.OutputEncoding = System.Text.Encoding.UTF8;
-            Thread vstupThread = new Thread(SledujKlavesy);
-            vstupThread.IsBackground = true;
-            vstupThread.Start();
+            Thread inputThread = new Thread(WatchKeys);
+            inputThread.IsBackground = true;
+            inputThread.Start();
 
-            NactiLevel(aktualniLevel);
+            LoadLevel(currentLevel);
 
             int interval = 120;
             int tick = 0;
 
-            konec = false;
-            while (!konec)
+            gameOver = false;
+            while (!gameOver)
             {
                 var start = DateTime.Now;
-                VykresliMapu();
+                DrawMap();
                 if (tick % 2 == 0)
                 {
-                    PohniHrace();
+                    MovePlayer();
                 }
-                PohniPolicisty();
-                if (ZkontrolujKolize()) break;
+                MovePolice();
+                if (CheckCollision()) break;
                 tick++;
-                int cekani = interval - (int)(DateTime.Now - start).TotalMilliseconds;
-                if (cekani > 0) Thread.Sleep(cekani);
+                int waitTime = interval - (int)(DateTime.Now - start).TotalMilliseconds;
+                if (waitTime > 0) Thread.Sleep(waitTime);
             }
 
-            Console.SetCursorPosition(0, vyska + 3);
+            Console.SetCursorPosition(0, height + 3);
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Konec hry. Stiskni libovolnou klávesu...");
+            Console.WriteLine("Game over. Press any key...");
             Console.ReadKey();
         }
 
-        static string[][] levely = new string[][]
+        static string[][] levels = new string[][]
         {
             new string[]
             {
                 "##############################",
-                "#Z   #     #####      #     X#",
+                "#S   #     #####      #     G#",
                 "### ### ###   ### ##  ### ####",
                 "#         #   #   #       #  #",
                 "# ### ### ##### ### ##### #  #",
@@ -99,7 +104,7 @@ namespace HerniProjekt
             new string[]
             {
                 "##############################",
-                "#Z    #     ###     ###     X#",
+                "#S    #     ###     ###     G#",
                 "# ### # ### ### ### ### #####",
                 "# #     #   #   #   #       #",
                 "# # ### # ##### ##### ##### #",
@@ -110,151 +115,151 @@ namespace HerniProjekt
             }
         };
 
-        static int aktualniLevel = 0;
-        static char[,] mapa;
-        static int sirka, vyska;
-        static int hracX, hracY;
-        static int cilX, cilY;
-        static List<(int x, int y, int smer)> policajti = new List<(int x, int y, int smer)>();
-        static Random rnd = new Random();
+        static int currentLevel = 0;
+        static char[,] map;
+        static int width, height;
+        static int playerX, playerY;
+        static int goalX, goalY;
+        static List<(int x, int y, int direction)> police = new List<(int x, int y, int direction)>();
+        static Random random = new Random();
 
-        static bool drzimW = false, drzimS = false, drzimA = false, drzimD = false;
-        static bool konec = false;
+        static bool holdingW = false, holdingS = false, holdingA = false, holdingD = false;
+        static bool gameOver = false;
 
-        static void NactiLevel(int index)
+        static void LoadLevel(int index)
         {
-            var radky = levely[index];
-            vyska = radky.Length;
-            sirka = radky[0].Length;
-            mapa = new char[vyska, sirka];
-            policajti.Clear();
+            var rows = levels[index];
+            height = rows.Length;
+            width = rows[0].Length;
+            map = new char[height, width];
+            police.Clear();
 
-            for (int y = 0; y < vyska; y++)
+            for (int y = 0; y < height; y++)
             {
-                for (int x = 0; x < sirka; x++)
+                for (int x = 0; x < width; x++)
                 {
-                    char znak = radky[y][x];
-                    mapa[y, x] = znak;
-                    if (znak == 'Z') { hracX = x; hracY = y; mapa[y, x] = ' '; }
-                    if (znak == 'X') { cilX = x; cilY = y; }
+                    char character = rows[y][x];
+                    map[y, x] = character;
+                    if (character == 'S') { playerX = x; playerY = y; map[y, x] = ' '; }
+                    if (character == 'G') { goalX = x; goalY = y; }
                 }
             }
 
-            policajti.Add((5, 2, 1));
-            policajti.Add((10, 5, -1));
-            policajti.Add((20, 3, 1));
+            police.Add((5, 2, 1));
+            police.Add((10, 5, -1));
+            police.Add((20, 3, 1));
         }
 
-        static void VykresliMapu()
+        static void DrawMap()
         {
             Console.SetCursorPosition(0, 0);
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine($"Level {aktualniLevel + 1}");
+            Console.WriteLine($"Level {currentLevel + 1}");
 
-            for (int y = 0; y < vyska; y++)
+            for (int y = 0; y < height; y++)
             {
-                for (int x = 0; x < sirka; x++)
+                for (int x = 0; x < width; x++)
                 {
-                    if (x == hracX && y == hracY)
+                    if (x == playerX && y == playerY)
                         Console.ForegroundColor = ConsoleColor.Red;
-                    else if (x == cilX && y == cilY)
+                    else if (x == goalX && y == goalY)
                         Console.ForegroundColor = ConsoleColor.Green;
-                    else if (policajti.Exists(p => p.x == x && p.y == y))
+                    else if (police.Exists(p => p.x == x && p.y == y))
                         Console.ForegroundColor = ConsoleColor.Cyan;
                     else
                         Console.ForegroundColor = ConsoleColor.White;
 
-                    if (x == hracX && y == hracY) Console.Write("Z");
-                    else if (x == cilX && y == cilY) Console.Write("X");
-                    else if (policajti.Exists(p => p.x == x && p.y == y)) Console.Write("P");
-                    else Console.Write(mapa[y, x]);
+                    if (x == playerX && y == playerY) Console.Write("Z");
+                    else if (x == goalX && y == goalY) Console.Write("G");
+                    else if (police.Exists(p => p.x == x && p.y == y)) Console.Write("P");
+                    else Console.Write(map[y, x]);
                 }
                 Console.WriteLine();
             }
         }
 
-        static void SledujKlavesy()
+        static void WatchKeys()
         {
             while (true)
             {
                 var key = Console.ReadKey(true).Key;
-                if (key == ConsoleKey.W) drzimW = true;
-                if (key == ConsoleKey.S) drzimS = true;
-                if (key == ConsoleKey.A) drzimA = true;
-                if (key == ConsoleKey.D) drzimD = true;
-                if (key == ConsoleKey.Escape) konec = true;
+                if (key == ConsoleKey.W) holdingW = true;
+                if (key == ConsoleKey.S) holdingS = true;
+                if (key == ConsoleKey.A) holdingA = true;
+                if (key == ConsoleKey.D) holdingD = true;
+                if (key == ConsoleKey.Escape) gameOver = true;
             }
         }
 
-        static void PohniHrace()
+        static void MovePlayer()
         {
-            int novaX = hracX, novaY = hracY;
-            if (drzimW) novaY--;
-            else if (drzimS) novaY++;
-            else if (drzimA) novaX--;
-            else if (drzimD) novaX++;
+            int newX = playerX, newY = playerY;
+            if (holdingW) newY--;
+            else if (holdingS) newY++;
+            else if (holdingA) newX--;
+            else if (holdingD) newX++;
 
-            if (JeVolne(novaX, novaY))
+            if (IsFree(newX, newY))
             {
-                hracX = novaX;
-                hracY = novaY;
+                playerX = newX;
+                playerY = newY;
             }
 
-            drzimW = drzimS = drzimA = drzimD = false;
+            holdingW = holdingS = holdingA = holdingD = false;
         }
 
-        static void PohniPolicisty()
+        static void MovePolice()
         {
-            for (int i = 0; i < policajti.Count; i++)
+            for (int i = 0; i < police.Count; i++)
             {
-                int x = policajti[i].x;
-                int y = policajti[i].y;
-                int smer = policajti[i].smer;
-                int novaX = x + smer;
+                int x = police[i].x;
+                int y = police[i].y;
+                int direction = police[i].direction;
+                int newX = x + direction;
 
-                if (JeVolne(novaX, y))
+                if (IsFree(newX, y))
                 {
-                    policajti[i] = (novaX, y, smer);
+                    police[i] = (newX, y, direction);
                 }
                 else
                 {
-                    smer *= -1;
-                    novaX = x + smer;
-                    if (JeVolne(novaX, y)) policajti[i] = (novaX, y, smer);
-                    else policajti[i] = (x, y, smer);
+                    direction *= -1;
+                    newX = x + direction;
+                    if (IsFree(newX, y)) police[i] = (newX, y, direction);
+                    else police[i] = (x, y, direction);
                 }
             }
         }
 
-        static bool JeVolne(int x, int y)
+        static bool IsFree(int x, int y)
         {
-            return x >= 0 && x < sirka && y >= 0 && y < vyska && mapa[y, x] != '#';
+            return x >= 0 && x < width && y >= 0 && y < height && map[y, x] != '#';
         }
 
-        static bool ZkontrolujKolize()
+        static bool CheckCollision()
         {
-            foreach (var p in policajti)
-                if (p.x == hracX && p.y == hracY)
+            foreach (var p in police)
+                if (p.x == playerX && p.y == playerY)
                 {
                     Console.Clear();
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("\u274C Policie tě chytila!");
+                    Console.WriteLine("\u274C Police caught you!");
                     return true;
                 }
 
-            if (hracX == cilX && hracY == cilY)
+            if (playerX == goalX && playerY == goalY)
             {
-                aktualniLevel++;
-                if (aktualniLevel < levely.Length)
+                currentLevel++;
+                if (currentLevel < levels.Length)
                 {
-                    NactiLevel(aktualniLevel);
+                    LoadLevel(currentLevel);
                     return false;
                 }
                 else
                 {
                     Console.Clear();
                     Console.ForegroundColor = ConsoleColor.Green;
-                    Console.WriteLine("\ud83c\udfc6 Vyhrál jsi všechny levely!");
+                    Console.WriteLine("\ud83c\udfc6 You won all levels!");
                     return true;
                 }
             }
@@ -262,7 +267,7 @@ namespace HerniProjekt
         }
     }
 
-    static class SkakaciHra
+    static class JumpingGame
     {
         static int targetFps = 50;
         static int frameTime = 1000 / targetFps;
@@ -275,7 +280,7 @@ namespace HerniProjekt
         static List<Platform> platforms;
         static Ball ball;
         static double scoreDistance;
-        static Random rand = new Random();
+        static Random random = new Random();
         static char[,] screenBuffer;
 
         const int VK_LEFT = 0x25;
@@ -293,13 +298,13 @@ namespace HerniProjekt
             scoreDistance = 0;
             Initialize();
 
-            var sw = new Stopwatch();
+            var stopwatch = new Stopwatch();
             while (true)
             {
-                sw.Restart();
+                stopwatch.Restart();
                 Update();
                 Render();
-                int elapsed = (int)sw.ElapsedMilliseconds;
+                int elapsed = (int)stopwatch.ElapsedMilliseconds;
                 if (elapsed < frameTime)
                     Thread.Sleep(frameTime - elapsed);
             }
@@ -311,11 +316,11 @@ namespace HerniProjekt
             for (int i = 0; i < platformCount; i++)
             {
                 int y = height - 1 - i * (height / platformCount);
-                int x = rand.Next(0, Math.Max(1, width - platformWidth));
+                int x = random.Next(0, Math.Max(1, width - platformWidth));
                 platforms.Add(new Platform(x, y));
             }
-            var p0 = platforms[0];
-            ball = new Ball(p0.X + platformWidth / 2, p0.Y - 1);
+            var platform0 = platforms[0];
+            ball = new Ball(platform0.X + platformWidth / 2, platform0.Y - 1);
         }
 
         static void Update()
@@ -328,12 +333,12 @@ namespace HerniProjekt
 
             if (ball.VY > 0)
             {
-                foreach (var p in platforms)
+                foreach (var platform in platforms)
                 {
-                    if (ball.PreviousY < p.Y && ball.Y >= p.Y && ball.X >= p.X && ball.X <= p.X + platformWidth)
+                    if (ball.PreviousY < platform.Y && ball.Y >= platform.Y && ball.X >= platform.X && ball.X <= platform.X + platformWidth)
                     {
                         ball.VY = jumpVelocity;
-                        ball.Y = p.Y - 1;
+                        ball.Y = platform.Y - 1;
                         break;
                     }
                 }
@@ -350,7 +355,7 @@ namespace HerniProjekt
                     if (platforms[i].Y > height - 1)
                     {
                         platforms[i].Y = 0;
-                        platforms[i].X = rand.Next(0, Math.Max(1, width - platformWidth));
+                        platforms[i].X = random.Next(0, Math.Max(1, width - platformWidth));
                     }
                 }
             }
@@ -373,19 +378,19 @@ namespace HerniProjekt
                 for (int x = 0; x < width; x++)
                     screenBuffer[y, x] = ' ';
 
-            foreach (var p in platforms)
+            foreach (var platform in platforms)
             {
-                int px = (int)Math.Round(p.X);
-                int py = (int)Math.Round(p.Y);
+                int px = (int)Math.Round(platform.X);
+                int py = (int)Math.Round(platform.Y);
                 if (py >= 0 && py < height)
                     for (int i = 0; i < platformWidth && px + i < width; i++)
                         screenBuffer[py, px + i] = '=';
             }
 
-            int bx = (int)Math.Round(ball.X);
-            int by = (int)Math.Round(ball.Y);
-            if (bx >= 0 && bx < width && by >= 0 && by < height)
-                screenBuffer[by, bx] = 'O';
+            int ballX = (int)Math.Round(ball.X);
+            int ballY = (int)Math.Round(ball.Y);
+            if (ballX >= 0 && ballX < width && ballY >= 0 && ballY < height)
+                screenBuffer[ballY, ballX] = 'O';
 
             var scoreText = $"Score: {(int)scoreDistance}";
             for (int i = 0; i < scoreText.Length && i < width; i++)
@@ -400,98 +405,88 @@ namespace HerniProjekt
         }
     }
 
-    // ===== NOVÁ TŘÍDA - SNAKE HRA =====
     static class SnakeGame
     {
-        static int sirka = 40;
-        static int vyska = 20;
-        static int hadX, hadY;
-        static int jidloX, jidloY;
-        static int smerX = 1, smerY = 0;
-        static List<(int x, int y)> hadTelo = new List<(int x, int y)>();
-        static int skore = 0;
-        static bool konec = false;
-        static Random rnd = new Random();
+        static int width = 40;
+        static int height = 20;
+        static int snakeX, snakeY;
+        static int foodX, foodY;
+        static int directionX = 1, directionY = 0;
+        static List<(int x, int y)> snakeBody = new List<(int x, int y)>();
+        static int score = 0;
+        static bool gameOver = false;
+        static Random random = new Random();
 
-        // Rychlosti pro různé směry
-        static int horizontalniRychlost = 100;  // Rychlejší pro vlevo/vpravo
-        static int vertikalniRychlost = 200;    // Pomalejší pro nahoru/dolů
-        static int aktualniRychlost = 100;
+        static int horizontalSpeed = 100;
+        static int verticalSpeed = 200;
+        static int currentSpeed = 100;
 
         public static void Start()
         {
             Console.CursorVisible = false;
             Console.Clear();
 
-            // Inicializace hada
-            hadX = sirka / 2;
-            hadY = vyska / 2;
-            hadTelo.Clear();
-            hadTelo.Add((hadX, hadY));
+            snakeX = width / 2;
+            snakeY = height / 2;
+            snakeBody.Clear();
+            snakeBody.Add((snakeX, snakeY));
 
-            // Vytvoření prvního jídla
-            VytvorJidlo();
+            CreateFood();
 
-            // Hlavní herní smyčka
-            Thread vstupThread = new Thread(SledujKlavesy);
-            vstupThread.IsBackground = true;
-            vstupThread.Start();
+            Thread inputThread = new Thread(WatchKeys);
+            inputThread.IsBackground = true;
+            inputThread.Start();
 
-            konec = false;
-            while (!konec)
+            gameOver = false;
+            while (!gameOver)
             {
                 var start = DateTime.Now;
-                VykresliHru();
-                PohniHada();
-                ZkontrolujKolize();
+                DrawGame();
+                MoveSnake();
+                CheckCollision();
 
-                // Čekání podle aktuální rychlosti
-                int cekani = aktualniRychlost - (int)(DateTime.Now - start).TotalMilliseconds;
-                if (cekani > 0) Thread.Sleep(cekani);
+                int waitTime = currentSpeed - (int)(DateTime.Now - start).TotalMilliseconds;
+                if (waitTime > 0) Thread.Sleep(waitTime);
             }
 
-            Console.SetCursorPosition(0, vyska + 3);
+            Console.SetCursorPosition(0, height + 3);
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine("Konec hry. Stiskni libovolnou klávesu...");
+            Console.WriteLine("Game over. Press any key...");
             Console.ReadKey();
 
-            // Reset pro další hru
-            skore = 0;
-            smerX = 1;
-            smerY = 0;
-            aktualniRychlost = horizontalniRychlost;
+            score = 0;
+            directionX = 1;
+            directionY = 0;
+            currentSpeed = horizontalSpeed;
         }
 
-        static void VytvorJidlo()
+        static void CreateFood()
         {
             do
             {
-                jidloX = rnd.Next(1, sirka - 1);
-                jidloY = rnd.Next(1, vyska - 1);
-            } while (hadTelo.Exists(segment => segment.x == jidloX && segment.y == jidloY));
+                foodX = random.Next(1, width - 1);
+                foodY = random.Next(1, height - 1);
+            } while (snakeBody.Exists(segment => segment.x == foodX && segment.y == foodY));
         }
 
-        static void VykresliHru()
+        static void DrawGame()
         {
             Console.SetCursorPosition(0, 0);
             Console.ForegroundColor = ConsoleColor.White;
-            Console.WriteLine($"Snake - Skóre: {skore} | Rychlost: {(aktualniRychlost == horizontalniRychlost ? "Rychlá" : "Pomalá")}");
+            Console.WriteLine($"Snake - Score: {score} | Speed: {(currentSpeed == horizontalSpeed ? "Fast" : "Slow")}");
 
-            // Horní ohraničení
             Console.Write("╔");
-            for (int x = 0; x < sirka; x++) Console.Write("═");
+            for (int x = 0; x < width; x++) Console.Write("═");
             Console.WriteLine("╗");
 
-            // Herní pole
-            for (int y = 0; y < vyska; y++)
+            for (int y = 0; y < height; y++)
             {
                 Console.Write("║");
-                for (int x = 0; x < sirka; x++)
+                for (int x = 0; x < width; x++)
                 {
-                    if (hadTelo.Exists(segment => segment.x == x && segment.y == y))
+                    if (snakeBody.Exists(segment => segment.x == x && segment.y == y))
                     {
-                        // Hlava hada je žlutá, tělo zelené
-                        if (hadTelo[0].x == x && hadTelo[0].y == y)
+                        if (snakeBody[0].x == x && snakeBody[0].y == y)
                         {
                             Console.ForegroundColor = ConsoleColor.Yellow;
                             Console.Write("█");
@@ -503,7 +498,7 @@ namespace HerniProjekt
                         }
                         Console.ForegroundColor = ConsoleColor.White;
                     }
-                    else if (x == jidloX && y == jidloY)
+                    else if (x == foodX && y == foodY)
                     {
                         Console.ForegroundColor = ConsoleColor.Red;
                         Console.Write("●");
@@ -517,16 +512,15 @@ namespace HerniProjekt
                 Console.WriteLine("║");
             }
 
-            // Dolní ohraničení
             Console.Write("╚");
-            for (int x = 0; x < sirka; x++) Console.Write("═");
+            for (int x = 0; x < width; x++) Console.Write("═");
             Console.WriteLine("╝");
 
-            Console.WriteLine("Ovládání: šipky nebo WASD, ESC = konec");
-            Console.WriteLine("Horizontální pohyb je rychlejší než vertikální");
+            Console.WriteLine("Controls: arrows or WASD, ESC = exit");
+            Console.WriteLine("Horizontal movement is faster than vertical");
         }
 
-        static void SledujKlavesy()
+        static void WatchKeys()
         {
             while (true)
             {
@@ -536,92 +530,379 @@ namespace HerniProjekt
                 {
                     case ConsoleKey.UpArrow:
                     case ConsoleKey.W:
-                        if (smerY != 1) // Nemůže jít opačným směrem
+                        if (directionY != 1)
                         {
-                            smerX = 0; smerY = -1;
-                            aktualniRychlost = vertikalniRychlost;
+                            directionX = 0; directionY = -1;
+                            currentSpeed = verticalSpeed;
                         }
                         break;
                     case ConsoleKey.DownArrow:
                     case ConsoleKey.S:
-                        if (smerY != -1)
+                        if (directionY != -1)
                         {
-                            smerX = 0; smerY = 1;
-                            aktualniRychlost = vertikalniRychlost;
+                            directionX = 0; directionY = 1;
+                            currentSpeed = verticalSpeed;
                         }
                         break;
                     case ConsoleKey.LeftArrow:
                     case ConsoleKey.A:
-                        if (smerX != 1)
+                        if (directionX != 1)
                         {
-                            smerX = -1; smerY = 0;
-                            aktualniRychlost = horizontalniRychlost;
+                            directionX = -1; directionY = 0;
+                            currentSpeed = horizontalSpeed;
                         }
                         break;
                     case ConsoleKey.RightArrow:
                     case ConsoleKey.D:
-                        if (smerX != -1)
+                        if (directionX != -1)
                         {
-                            smerX = 1; smerY = 0;
-                            aktualniRychlost = horizontalniRychlost;
+                            directionX = 1; directionY = 0;
+                            currentSpeed = horizontalSpeed;
                         }
                         break;
                     case ConsoleKey.Escape:
-                        konec = true;
+                        gameOver = true;
                         break;
                 }
             }
         }
 
-        static void PohniHada()
+        static void MoveSnake()
         {
-            // Nová pozice hlavy
-            int novaX = hadTelo[0].x + smerX;
-            int novaY = hadTelo[0].y + smerY;
+            int newX = snakeBody[0].x + directionX;
+            int newY = snakeBody[0].y + directionY;
 
-            // Přidání nové hlavy
-            hadTelo.Insert(0, (novaX, novaY));
+            snakeBody.Insert(0, (newX, newY));
 
-            // Kontrola jídla
-            if (novaX == jidloX && novaY == jidloY)
+            if (newX == foodX && newY == foodY)
             {
-                skore++;
-                VytvorJidlo();
+                score++;
+                CreateFood();
             }
             else
             {
-                // Odstranění ocasu (had se neprodlouží)
-                hadTelo.RemoveAt(hadTelo.Count - 1);
+                snakeBody.RemoveAt(snakeBody.Count - 1);
             }
         }
 
-        static void ZkontrolujKolize()
+        static void CheckCollision()
         {
-            var hlava = hadTelo[0];
+            var head = snakeBody[0];
 
-            // Kolize se stěnami
-            if (hlava.x < 0 || hlava.x >= sirka || hlava.y < 0 || hlava.y >= vyska)
+            if (head.x < 0 || head.x >= width || head.y < 0 || head.y >= height)
             {
                 Console.Clear();
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("💥 Narazil jsi do stěny!");
-                Console.WriteLine($"Tvé skóre: {skore}");
-                konec = true;
+                Console.WriteLine("💥 Hit the wall!");
+                Console.WriteLine($"Your score: {score}");
+                gameOver = true;
                 return;
             }
 
-            // Kolize se sebou samým
-            for (int i = 1; i < hadTelo.Count; i++)
+            for (int i = 1; i < snakeBody.Count; i++)
             {
-                if (hadTelo[i].x == hlava.x && hadTelo[i].y == hlava.y)
+                if (snakeBody[i].x == head.x && snakeBody[i].y == head.y)
                 {
                     Console.Clear();
                     Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine("💥 Had se kousl do ocasu!");
-                    Console.WriteLine($"Tvé skóre: {skore}");
-                    konec = true;
+                    Console.WriteLine("💥 Snake bit its tail!");
+                    Console.WriteLine($"Your score: {score}");
+                    gameOver = true;
                     return;
                 }
+            }
+        }
+    }
+
+    static class BombDodger
+    {
+        const int Width = 40;
+        const int Height = 20;
+        const char BorderChar = '#';
+        const char PlayerChar = '@';
+        const char BombChar = 'B';
+        const char RockChar = 'K';
+        const char ExplosionChar = '*';
+
+        static int playerX = Width / 2;
+        static int playerY = Height - 2;
+        static int score = 0;
+        static int timeAlive = 0;
+        static bool gameOver = false;
+
+        static List<Entity> bombs = new List<Entity>();
+        static List<Entity> rocks = new List<Entity>();
+        static List<Explosion> explosions = new List<Explosion>();
+
+        static Random random = new Random();
+
+        public static void Start()
+        {
+            Console.CursorVisible = false;
+            Console.Clear();
+
+            playerX = Width / 2;
+            playerY = Height - 2;
+            score = 0;
+            timeAlive = 0;
+            gameOver = false;
+            bombs.Clear();
+            rocks.Clear();
+            explosions.Clear();
+
+            Thread inputThread = new Thread(HandleInput);
+            inputThread.IsBackground = true;
+            inputThread.Start();
+
+            while (!gameOver)
+            {
+                var start = DateTime.Now;
+
+                SpawnEntities();
+                UpdateEntities();
+                UpdateExplosions();
+                UpdateScore();
+
+                if (CheckCollision())
+                {
+                    GameOver();
+                    break;
+                }
+
+                Draw();
+
+                int elapsed = (int)(DateTime.Now - start).TotalMilliseconds;
+                int sleepTime = 100 - elapsed;
+                if (sleepTime > 0) Thread.Sleep(sleepTime);
+            }
+
+            Console.SetCursorPosition(0, Height + 3);
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine("Game over. Press any key...");
+            Console.ReadKey();
+        }
+
+        static void HandleInput()
+        {
+            while (!gameOver)
+            {
+                if (Console.KeyAvailable)
+                {
+                    var key = Console.ReadKey(true).Key;
+                    MovePlayer(key);
+                }
+                Thread.Sleep(50);
+            }
+        }
+
+        static void MovePlayer(ConsoleKey key)
+        {
+            switch (key)
+            {
+                case ConsoleKey.LeftArrow:
+                case ConsoleKey.A:
+                    if (playerX > 1) playerX--;
+                    break;
+                case ConsoleKey.RightArrow:
+                case ConsoleKey.D:
+                    if (playerX < Width - 2) playerX++;
+                    break;
+                case ConsoleKey.UpArrow:
+                case ConsoleKey.W:
+                    if (playerY > 1) playerY--;
+                    break;
+                case ConsoleKey.DownArrow:
+                case ConsoleKey.S:
+                    if (playerY < Height - 2) playerY++;
+                    break;
+                case ConsoleKey.Escape:
+                    gameOver = true;
+                    break;
+            }
+        }
+
+        static void SpawnEntities()
+        {
+            double bombChance = 0.15 + (timeAlive / 1000.0) * 0.1;
+            double rockChance = 0.08 + (timeAlive / 1000.0) * 0.05;
+
+            if (random.NextDouble() < bombChance)
+            {
+                int x = random.Next(1, Width - 1);
+                int dx = random.Next(-1, 2);
+                bombs.Add(new Entity(x, 1, dx, 1, BombChar));
+            }
+
+            if (random.NextDouble() < rockChance)
+            {
+                int x = random.Next(1, Width - 1);
+                int dx = random.Next(-1, 2);
+                rocks.Add(new Entity(x, 1, dx, 1, RockChar));
+            }
+        }
+
+        static void UpdateEntities()
+        {
+            List<Entity> toExplode = new List<Entity>();
+
+            foreach (var bomb in bombs.ToList())
+            {
+                bomb.Move();
+                if (bomb.Y >= Height - 1)
+                {
+                    toExplode.Add(bomb);
+                    bombs.Remove(bomb);
+                }
+            }
+
+            foreach (var rock in rocks.ToList())
+            {
+                rock.Move();
+                if (rock.Y >= Height - 1 || rock.X <= 0 || rock.X >= Width - 1)
+                    rocks.Remove(rock);
+            }
+
+            foreach (var bomb in toExplode)
+            {
+                explosions.Add(new Explosion(bomb.X, bomb.Y));
+            }
+        }
+
+        static void UpdateExplosions()
+        {
+            explosions.RemoveAll(explosion => (DateTime.Now - explosion.StartTime).TotalMilliseconds > 500);
+        }
+
+        static void UpdateScore()
+        {
+            timeAlive++;
+            if (timeAlive % 10 == 0) score++;
+        }
+
+        static bool CheckCollision()
+        {
+            foreach (var bomb in bombs)
+                if (bomb.X == playerX && bomb.Y == playerY)
+                    return true;
+
+            foreach (var rock in rocks)
+                if (rock.X == playerX && rock.Y == playerY)
+                    return true;
+
+            foreach (var explosion in explosions)
+                if (explosion.X == playerX && explosion.Y == playerY)
+                    return true;
+
+            return false;
+        }
+
+        static void Draw()
+        {
+            Console.SetCursorPosition(0, 0);
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine($"Bomb Dodger - Score: {score} | Time: {timeAlive / 10}s");
+
+            for (int y = 0; y < Height; y++)
+            {
+                for (int x = 0; x < Width; x++)
+                {
+                    if (y == 0 || y == Height - 1 || x == 0 || x == Width - 1)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Blue;
+                        Console.Write(BorderChar);
+                        Console.ForegroundColor = ConsoleColor.White;
+                        continue;
+                    }
+
+                    if (x == playerX && y == playerY)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.Write(PlayerChar);
+                        Console.ForegroundColor = ConsoleColor.White;
+                        continue;
+                    }
+
+                    var bomb = bombs.FirstOrDefault(b => b.X == x && b.Y == y);
+                    if (bomb != null)
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                        Console.Write(BombChar);
+                        Console.ForegroundColor = ConsoleColor.White;
+                        continue;
+                    }
+
+                    var rock = rocks.FirstOrDefault(r => r.X == x && r.Y == y);
+                    if (rock != null)
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkGray;
+                        Console.Write(RockChar);
+                        Console.ForegroundColor = ConsoleColor.White;
+                        continue;
+                    }
+
+                    var explosion = explosions.FirstOrDefault(e => e.X == x && e.Y == y);
+                    if (explosion != null)
+                    {
+                        Console.ForegroundColor = ConsoleColor.DarkRed;
+                        Console.Write(ExplosionChar);
+                        Console.ForegroundColor = ConsoleColor.White;
+                        continue;
+                    }
+
+                    Console.Write(' ');
+                }
+                Console.WriteLine();
+            }
+
+            Console.WriteLine("Controls: arrows or WASD, ESC = exit");
+            Console.WriteLine("Avoid bombs (B), rocks (K) and explosions (*)!");
+        }
+
+        static void GameOver()
+        {
+            Console.Clear();
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine("💥 GAME OVER!");
+            Console.ForegroundColor = ConsoleColor.White;
+            Console.WriteLine($"Your score: {score}");
+            Console.WriteLine($"Survived: {timeAlive / 10} seconds");
+            gameOver = true;
+        }
+
+        class Entity
+        {
+            public int X, Y;
+            int deltaX, deltaY;
+            char symbol;
+
+            public Entity(int x, int y, int deltaX, int deltaY, char symbol)
+            {
+                X = x;
+                Y = y;
+                this.deltaX = deltaX;
+                this.deltaY = deltaY;
+                this.symbol = symbol;
+            }
+
+            public void Move()
+            {
+                X += deltaX;
+                Y += deltaY;
+            }
+
+            public char Symbol => symbol;
+        }
+
+        class Explosion
+        {
+            public int X, Y;
+            public DateTime StartTime;
+
+            public Explosion(int x, int y)
+            {
+                X = x;
+                Y = y;
+                StartTime = DateTime.Now;
             }
         }
     }
